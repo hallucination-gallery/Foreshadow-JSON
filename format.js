@@ -85,7 +85,7 @@ function validate(format) {
  */
 function processPassageElement(passageElement, format) {
     const passageMeta = getElementAttributes(passageElement);
-    const result = {https://github.com/hallucination-gallery/Foreshadow-JSON
+    const result = {
         tags: passageMeta.tags,
         pid: passageMeta.pid,
     };
