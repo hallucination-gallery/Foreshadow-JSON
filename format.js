@@ -1,21 +1,23 @@
 window.storyFormat({
-	"name": "JTwine-To-JSON",
-	"version": "0.2.2",
-	"author": "Jason Francis",
-	"description": "Export your Twine 2 story as a JSON document, based on Twine-to-JSON",
-	"proofing": false,
-	"source": `
+  name: "Foreshadow",
+  version: "0.0.1",
+  author: "Rene Tailleur",
+  description:
+    "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
+  proofing: false,
+  editorExtensions: "./foreshadow-editor.js",
+  source: `
 	<html>
 	<head>
         <meta http-equiv='Content-Type' content='text/html; charset=UTF-8' />
-		<title>Harlowe To JSON</title>
+		<title>Foreshadow JSON</title>
         <script type='text/javascript'>
             /**
-* JTwine-To-JSON: modified by Jason Francis for use in BL-MSCH-C220
+* Foreshadow: modified by Rene Tailleur for use in Foreshadow Dialogue Manager
 *
-* Originally adapted from [twine-to-json](https://jtschoonhoven.github.io/twine-to-json/)
+* Originally adapted from [JTwine-to-JSON](https://github.com/BL-MSCH-C220/JTwine-to-JSON) adapted from [twine-to-json](https://jtschoonhoven.github.io/twine-to-json/)
 *
-* Copyright (c) 2022 Jason Francis
+*
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 * associated documentation files (the 'Software'), to deal in the Software without restriction,
@@ -45,7 +47,7 @@ function twineToJSON(format) {
     const storyMeta = getElementAttributes(storyElement);
     const result = {
         story: storyMeta.name,
-		startnode: storyMeta.startnode		
+		startnode: storyMeta.startnode
     };
     validate(format);
     const passageElements = Array.from(storyElement.getElementsByTagName(PASSAGE_TAG_NAME));
@@ -83,7 +85,7 @@ function validate(format) {
  */
 function processPassageElement(passageElement, format) {
     const passageMeta = getElementAttributes(passageElement);
-    const result = {
+    const result = {https://github.com/BL-MSCH-C220/JTwine-to-JSON
         name: passageMeta.name,
         tags: passageMeta.tags,
         pid: passageMeta.pid,
@@ -246,5 +248,5 @@ function getSubstringBetweenBrackets(string, startIndex, openBracket, closeBrack
         <script type='text/javascript'>document.getElementById('content').innerHTML = JSON.stringify(twineToJSON("twine"), null, 2);</script>
 	</body>
 </html>
-	`
-  });
+	`,
+});
