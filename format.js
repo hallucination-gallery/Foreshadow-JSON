@@ -5,7 +5,7 @@ window.storyFormat({
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
   proofing: false,
-  editorExtensions: "https://raw.githubusercontent.com/hallucination-gallery/Foreshadow-JSON/main/foreshadow-editor.js",
+  editorExtensions: "https://cdn.jsdelivr.net/gh/hallucination-gallery/Foreshadow-JSON@main/foreshadow-editor.js",
   source: `
 	<html>
 	<head>

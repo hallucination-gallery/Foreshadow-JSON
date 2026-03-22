@@ -5,7 +5,7 @@ Forshadow JSON adds syntax highlighting to [JTwine-to-JSON](https://github.com/B
 
 ## Setup
 
-From the Twine 2 homescreen, select the Twine Menu, then "Story Format". "+ Add" a New Format. At the prompt, "Paste in the address below": `https://raw.githubusercontent.com/hallucination-gallery/Foreshadow-JSON/main/format.js`
+From the Twine 2 homescreen, select the Twine Menu, then "Story Format". "+ Add" a New Format. At the prompt, "Paste in the address below": `https://cdn.jsdelivr.net/gh/hallucination-gallery/Foreshadow-JSON@main/format.js`
 
 
 ## Export
