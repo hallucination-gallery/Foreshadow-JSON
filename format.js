@@ -5,7 +5,7 @@ window.storyFormat({
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
   proofing: false,
-  editorExtensions: "./foreshadow-editor.js",
+  //editorExtensions: "./foreshadow-editor.js",
   source: `
 	<html>
 	<head>
@@ -85,8 +85,7 @@ function validate(format) {
  */
 function processPassageElement(passageElement, format) {
     const passageMeta = getElementAttributes(passageElement);
-    const result = {https://github.com/BL-MSCH-C220/JTwine-to-JSON
-        name: passageMeta.name,
+    const result = {//https://github.com/hallucination-gallery/Foreshadow-JSON
         tags: passageMeta.tags,
         pid: passageMeta.pid,
     };
