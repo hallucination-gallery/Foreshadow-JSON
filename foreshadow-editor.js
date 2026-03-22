@@ -29,6 +29,8 @@
 (function () {
   "use strict";
 
+  console.log("[Foreshadow] editor extension loaded");
+
   // ─── Constants ────────────────────────────────────────────────────────────
 
   const VALID_FUNCTIONS = [
