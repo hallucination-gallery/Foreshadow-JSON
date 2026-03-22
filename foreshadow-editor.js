@@ -29,6 +29,7 @@
 (function () {
   "use strict";
 
+  function setup() {
   // ─── Constants ────────────────────────────────────────────────────────────
 
   const VALID_FUNCTIONS = [
@@ -467,9 +468,24 @@
     });
   }
 
-  patchExisting();
+  // Defer first patch so Twine's React component finishes mounting the editor
+  setTimeout(patchExisting, 0);
 
   // Watch for passage editor dialogs opening after page load
-  const observer = new MutationObserver(patchExisting);
+  const observer = new MutationObserver(function () {
+    setTimeout(patchExisting, 0);
+  });
   observer.observe(document.body, { childList: true, subtree: true });
+
+  } // end setup()
+
+  // Twine may bundle CodeMirror as a module rather than exposing it on window
+  // immediately. Retry until it is available.
+  (function trySetup() {
+    if (typeof window.CodeMirror !== "undefined") {
+      setup();
+    } else {
+      setTimeout(trySetup, 50);
+    }
+  })();
 })();
