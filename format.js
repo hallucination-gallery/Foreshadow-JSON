@@ -1,6 +1,6 @@
 window.storyFormat({
   name: "Foreshadow",
-  version: "0.0.1",
+  version: "0.0.2",
   author: "Rene Tailleur",
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",

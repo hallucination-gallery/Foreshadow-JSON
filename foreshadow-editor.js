@@ -29,7 +29,6 @@
 (function () {
   "use strict";
 
-  function setup() {
   // ─── Constants ────────────────────────────────────────────────────────────
 
   const VALID_FUNCTIONS = [
@@ -65,103 +64,137 @@
     debug_log: [0, 0],
   };
 
-  // ─── CodeMirror Mode ──────────────────────────────────────────────────────
+  // ─── Lazy mode registration ────────────────────────────────────────────────
+  //
+  // Twine may bundle CodeMirror as a module rather than exposing it on
+  // window.CodeMirror. ensureModeRegistered() is called with the CM
+  // constructor obtained from a live editor instance (cm.constructor), so
+  // we never need the global to be present.
 
-  CodeMirror.defineMode("foreshadow", function () {
-    return {
-      startState: function () {
-        return {
-          depth: 0, // nesting level
-          pipeCount: 0, // pipes seen in the innermost block
-          fnName: null, // function name of the innermost block
-          fnStack: [], // saved state for outer blocks: [{ pipeCount, fnName }]
-        };
-      },
+  var modeRegistered = false;
 
-      copyState: function (state) {
-        return {
-          depth: state.depth,
-          pipeCount: state.pipeCount,
-          fnName: state.fnName,
-          fnStack: state.fnStack.slice(),
-        };
-      },
+  function ensureModeRegistered(CM) {
+    if (modeRegistered) return;
+    modeRegistered = true;
 
-      token: function (stream, state) {
-        // ── Opening (( ──────────────────────────────────────────────────────
-        if (stream.match("((")) {
-          state.fnStack.push({
+    // ── CodeMirror Mode ──────────────────────────────────────────────────────
+
+    CM.defineMode("foreshadow", function () {
+      return {
+        startState: function () {
+          return {
+            depth: 0, // nesting level
+            pipeCount: 0, // pipes seen in the innermost block
+            fnName: null, // function name of the innermost block
+            fnStack: [], // saved state for outer blocks: [{ pipeCount, fnName }]
+          };
+        },
+
+        copyState: function (state) {
+          return {
+            depth: state.depth,
             pipeCount: state.pipeCount,
             fnName: state.fnName,
-          });
-          state.depth++;
-          state.pipeCount = 0;
-          state.fnName = null;
-          return "foreshadow-bracket";
-        }
+            fnStack: state.fnStack.slice(),
+          };
+        },
 
-        // ── Closing )) ──────────────────────────────────────────────────────
-        if (state.depth > 0 && stream.match("))")) {
-          const parent = state.fnStack.pop();
-          state.depth--;
-          state.pipeCount = parent ? parent.pipeCount : 0;
-          state.fnName = parent ? parent.fnName : null;
-          return "foreshadow-bracket";
-        }
+        token: function (stream, state) {
+          // ── Opening (( ────────────────────────────────────────────────────
+          if (stream.match("((")) {
+            state.fnStack.push({
+              pipeCount: state.pipeCount,
+              fnName: state.fnName,
+            });
+            state.depth++;
+            state.pipeCount = 0;
+            state.fnName = null;
+            return "foreshadow-bracket";
+          }
 
-        // ── Inside a script block ───────────────────────────────────────────
-        if (state.depth > 0) {
-          // Don't consume (( or )) here — let the checks above handle them
-          // on the next token call.
-          if (stream.match("((", false) || stream.match("))", false)) {
+          // ── Closing )) ────────────────────────────────────────────────────
+          if (state.depth > 0 && stream.match("))")) {
+            const parent = state.fnStack.pop();
+            state.depth--;
+            state.pipeCount = parent ? parent.pipeCount : 0;
+            state.fnName = parent ? parent.fnName : null;
+            return "foreshadow-bracket";
+          }
+
+          // ── Inside a script block ─────────────────────────────────────────
+          if (state.depth > 0) {
+            // Don't consume (( or )) here — let the checks above handle them
+            // on the next token call.
+            if (stream.match("((", false) || stream.match("))", false)) {
+              return null;
+            }
+
+            // Pipe separator
+            if (stream.eat("|")) {
+              state.pipeCount++;
+              return "foreshadow-pipe";
+            }
+
+            // Function name — first thing after ((, before any pipe
+            if (state.pipeCount === 0 && state.fnName === null) {
+              if (stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
+                const word = stream.current().toLowerCase();
+                state.fnName = word;
+                return VALID_FUNCTIONS.includes(word)
+                  ? "foreshadow-fn"
+                  : "foreshadow-error";
+              }
+            }
+
+            // Comparison operators (before generic identifier match)
+            if (stream.match(/^(==|!=|>=|<=|>|<)/)) {
+              return "foreshadow-operator";
+            }
+
+            // Numbers
+            if (stream.match(/^-?\d+(\.\d+)?/)) {
+              return "foreshadow-number";
+            }
+
+            // Everything else up to the next |, (, ), or newline
+            if (stream.match(/^[^|()\n]+/)) {
+              return "foreshadow-param";
+            }
+
+            stream.next();
             return null;
           }
 
-          // Pipe separator
-          if (stream.eat("|")) {
-            state.pipeCount++;
-            return "foreshadow-pipe";
-          }
-
-          // Function name — first thing after ((, before any pipe
-          if (state.pipeCount === 0 && state.fnName === null) {
-            if (stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
-              const word = stream.current().toLowerCase();
-              state.fnName = word;
-              return VALID_FUNCTIONS.includes(word)
-                ? "foreshadow-fn"
-                : "foreshadow-error";
-            }
-          }
-
-          // Comparison operators (before generic identifier match)
-          if (stream.match(/^(==|!=|>=|<=|>|<)/)) {
-            return "foreshadow-operator";
-          }
-
-          // Numbers
-          if (stream.match(/^-?\d+(\.\d+)?/)) {
-            return "foreshadow-number";
-          }
-
-          // Everything else up to the next |, (, ), or newline
-          if (stream.match(/^[^|()\n]+/)) {
-            // If this is the pc/npc attribute slot or get/signal param,
-            // we can validate membership — but a simple color is enough here;
-            // the linter handles semantic errors.
-            return "foreshadow-param";
-          }
-
+          // ── Regular passage prose ──────────────────────────────────────────
           stream.next();
           return null;
-        }
+        },
+      };
+    });
 
-        // ── Regular passage prose ───────────────────────────────────────────
-        stream.next();
-        return null;
-      },
-    };
-  });
+    if (CM.registerHelper) {
+      CM.registerHelper("lint", "foreshadow", lintForeshadow);
+    }
+
+    // ── Token styles ──────────────────────────────────────────────────────────
+
+    if (!document.getElementById("foreshadow-editor-styles")) {
+      const css = `
+        /* Foreshadow scripting language — token colours */
+        .cm-foreshadow-bracket  { color: #e8a900; font-weight: bold; }
+        .cm-foreshadow-fn       { color: #7ecfff; font-weight: bold; }
+        .cm-foreshadow-pipe     { color: #6272a4; }
+        .cm-foreshadow-operator { color: #ff79c6; }
+        .cm-foreshadow-number   { color: #bd93f9; }
+        .cm-foreshadow-param    { color: #50fa7b; }
+        .cm-foreshadow-error    { color: #ff5555; text-decoration: underline wavy red; }
+      `;
+      const styleEl = document.createElement("style");
+      styleEl.id = "foreshadow-editor-styles";
+      styleEl.textContent = css;
+      document.head.appendChild(styleEl);
+    }
+  }
 
   // ─── Linter ───────────────────────────────────────────────────────────────
 
@@ -170,7 +203,7 @@
    */
   function offsetToPos(text, offset) {
     const before = text.substring(0, offset).split("\n");
-    return CodeMirror.Pos(before.length - 1, before[before.length - 1].length);
+    return { line: before.length - 1, ch: before[before.length - 1].length };
   }
 
   /**
@@ -198,7 +231,7 @@
 
     const [min, max] = PARAM_COUNTS[fnName];
 
-    // ── if: two variants ────────────────────────────────────────────────────
+    // ── if: two variants ──────────────────────────────────────────────────────
     if (fnName === "if") {
       if (argCount < 2) {
         errors.push({
@@ -214,8 +247,6 @@
 
       if (isPcVariant) {
         // ((if|pc|condition||||true_text|false_text?))
-        // params[0]="pc" params[1]=condition params[2..3]=unused
-        // params[4]=true_text params[5]=false_text
         if (argCount < 5) {
           errors.push({
             from: start,
@@ -249,7 +280,7 @@
       return;
     }
 
-    // ── All other functions ─────────────────────────────────────────────────
+    // ── All other functions ───────────────────────────────────────────────────
     if (argCount < min) {
       errors.push({
         from: start,
@@ -266,7 +297,7 @@
       });
     }
 
-    // ── pc / npc attribute validation ────────────────────────────────────────
+    // ── pc / npc attribute validation ─────────────────────────────────────────
     if (fnName === "pc" && argCount >= 1) {
       const attr = args[0].trim().toLowerCase();
       if (!PC_NPC_ATTRS.includes(attr)) {
@@ -328,7 +359,7 @@
     let i = 0;
 
     while (i < len) {
-      // ── Opening (( ────────────────────────────────────────────────────────
+      // ── Opening (( ──────────────────────────────────────────────────────────
       if (text.substr(i, 2) === "((") {
         stack.push({ start: i, tokens: [], currentToken: "" });
         i += 2;
@@ -342,7 +373,7 @@
 
       const block = stack[stack.length - 1];
 
-      // ── Closing )) ────────────────────────────────────────────────────────
+      // ── Closing )) ──────────────────────────────────────────────────────────
       if (text.substr(i, 2) === "))") {
         // Finalize the last token
         block.tokens.push(block.currentToken);
@@ -372,7 +403,7 @@
         continue;
       }
 
-      // ── Pipe separator ────────────────────────────────────────────────────
+      // ── Pipe separator ──────────────────────────────────────────────────────
       if (text[i] === "|") {
         block.tokens.push(block.currentToken);
         block.currentToken = "";
@@ -380,7 +411,7 @@
         continue;
       }
 
-      // ── Regular character inside block ────────────────────────────────────
+      // ── Regular character inside block ──────────────────────────────────────
       block.currentToken += text[i];
       i++;
     }
@@ -412,54 +443,18 @@
     });
   }
 
-  if (CodeMirror.registerHelper) {
-    CodeMirror.registerHelper("lint", "foreshadow", lintForeshadow);
-  }
-
-  // ─── Token styles ─────────────────────────────────────────────────────────
-
-  const css = `
-    /* Foreshadow scripting language — token colours */
-    .cm-foreshadow-bracket  { color: #e8a900; font-weight: bold; }
-    .cm-foreshadow-fn       { color: #7ecfff; font-weight: bold; }
-    .cm-foreshadow-pipe     { color: #6272a4; }
-    .cm-foreshadow-operator { color: #ff79c6; }
-    .cm-foreshadow-number   { color: #bd93f9; }
-    .cm-foreshadow-param    { color: #50fa7b; }
-    .cm-foreshadow-error    { color: #ff5555; text-decoration: underline wavy red; }
-  `;
-
-  const styleEl = document.createElement("style");
-  styleEl.id = "foreshadow-editor-styles";
-  styleEl.textContent = css;
-  document.head.appendChild(styleEl);
-
   // ─── Apply to Twine's editor ───────────────────────────────────────────────
-  //
-  // Twine 2.4+ loads editorExtensions as a module and the exact integration
-  // surface differs by Twine version.  The block below covers three approaches:
-  //
-  //   1. twineEditorExtensions object  (some 2.4.x builds)
-  //   2. Monkey-patching CodeMirror instances that already exist in the DOM
-  //   3. Observing new CodeMirror instances added later (MutationObserver)
-  //
 
   function applyModeToEditor(cm) {
+    // Register the mode using the constructor from this live instance.
+    // This works even when window.CodeMirror is not exposed globally.
+    ensureModeRegistered(cm.constructor);
     cm.setOption("mode", "foreshadow");
-    if (cm.setOption && CodeMirror.registerHelper) {
+    if (cm.constructor.registerHelper) {
       cm.setOption("lint", { getAnnotations: lintForeshadow, async: false });
     }
   }
 
-  // Approach 1 — Twine's declared extension hook (if present)
-  if (window.twineEditorExtensions) {
-    window.twineEditorExtensions.push({
-      mode: "foreshadow",
-      lint: lintForeshadow,
-    });
-  }
-
-  // Approach 2 & 3 — directly patch any CodeMirror instances
   function patchExisting() {
     document.querySelectorAll(".CodeMirror").forEach(function (el) {
       if (el.CodeMirror && el.CodeMirror.getOption("mode") !== "foreshadow") {
@@ -468,7 +463,17 @@
     });
   }
 
-  // Defer first patch so Twine's React component finishes mounting the editor
+  // Register early if window.CodeMirror is already available
+  if (typeof window.CodeMirror !== "undefined") {
+    ensureModeRegistered(window.CodeMirror);
+    if (window.twineEditorExtensions) {
+      window.twineEditorExtensions.push({
+        mode: "foreshadow",
+        lint: lintForeshadow,
+      });
+    }
+  }
+
   setTimeout(patchExisting, 0);
 
   // Watch for passage editor dialogs opening after page load
@@ -476,16 +481,4 @@
     setTimeout(patchExisting, 0);
   });
   observer.observe(document.body, { childList: true, subtree: true });
-
-  } // end setup()
-
-  // Twine may bundle CodeMirror as a module rather than exposing it on window
-  // immediately. Retry until it is available.
-  (function trySetup() {
-    if (typeof window.CodeMirror !== "undefined") {
-      setup();
-    } else {
-      setTimeout(trySetup, 50);
-    }
-  })();
 })();
