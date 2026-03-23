@@ -162,12 +162,10 @@
   }
 
   // ─── Hint / autocomplete ──────────────────────────────────────────────────
-  // Returns completions for the token at the cursor when inside a (( )) block.
+  // Computes completions for the token at the cursor when inside a (( )) block.
 
-  function foreshadowHint(cm) {
+  function getForeshadowCompletions(cm) {
     const cursor = cm.getCursor();
-
-    // Compute cursor's character offset in the full document text
     let cursorOffset = 0;
     for (let i = 0; i < cursor.line; i++) cursorOffset += cm.getLine(i).length + 1;
     cursorOffset += cursor.ch;
@@ -185,33 +183,29 @@
       }
       i--;
     }
-
-    if (blockStart === -1) return null; // cursor is not inside a (( )) block
+    if (blockStart === -1) return null;
 
     const parts = textBefore.substring(blockStart + 2).split("|");
     const partIndex = parts.length - 1;
     const currentPart = parts[partIndex];
-    const trimmed = currentPart.trimStart(); // strip leading whitespace for matching
+    const trimmed = currentPart.trimStart();
     const partial = trimmed.toLowerCase();
 
     let list = [];
-
     if (partIndex === 0) {
-      // Position of the function name
       list = VALID_FUNCTIONS.filter(f => f.startsWith(partial));
     } else {
       const fn = parts[0].trim().toLowerCase();
-      const param = partIndex - 1; // 0-indexed parameter position
-      if (fn === "pc" && param === 0) {
-        list = PC_NPC_ATTRS.filter(a => a.startsWith(partial));
-      } else if (fn === "npc" && param === 1) {
-        list = PC_NPC_ATTRS.filter(a => a.startsWith(partial));
-      } else if (fn === "if" && param === 0 && "pc".startsWith(partial)) {
-        list = ["pc"];
-      }
+      const param = partIndex - 1;
+      if (fn === "pc" && param === 0)       list = PC_NPC_ATTRS.filter(a => a.startsWith(partial));
+      else if (fn === "npc" && param === 1) list = PC_NPC_ATTRS.filter(a => a.startsWith(partial));
+      else if (fn === "if" && param === 0 && "pc".startsWith(partial)) list = ["pc"];
     }
 
+    // Don't suggest when the word is already an exact match
+    if (list.length === 1 && list[0] === partial) return null;
     if (!list.length) return null;
+
     return {
       list,
       from: { line: cursor.line, ch: cursor.ch - trimmed.length },
@@ -219,22 +213,102 @@
     };
   }
 
+  // ─── Hint widget (no external addon required) ─────────────────────────────
+
+  var activeHint = null;
+
+  function closeHintWidget() {
+    if (!activeHint) return;
+    activeHint.el.remove();
+    document.removeEventListener("mousedown", activeHint.docHandler);
+    activeHint.cm.removeKeyMap(activeHint.keyMap);
+    activeHint = null;
+  }
+
+  function showHintWidget(cm) {
+    closeHintWidget();
+    const result = getForeshadowCompletions(cm);
+    if (!result) return;
+
+    const coords = cm.cursorCoords(true, "page");
+    let activeIndex = 0;
+
+    const ul = document.createElement("ul");
+    ul.style.cssText = [
+      "position:fixed",
+      "left:" + Math.round(coords.left) + "px",
+      "top:" + Math.round(coords.bottom + 2) + "px",
+      "background:#282a36",
+      "border:1px solid #44475a",
+      "border-radius:4px",
+      "list-style:none",
+      "margin:0",
+      "padding:2px 0",
+      "z-index:99999",
+      "font-family:monospace",
+      "font-size:13px",
+      "box-shadow:0 4px 12px rgba(0,0,0,0.5)",
+      "min-width:130px",
+    ].join(";");
+
+    function render() {
+      ul.innerHTML = "";
+      result.list.forEach(function (item, idx) {
+        const li = document.createElement("li");
+        li.textContent = item;
+        li.style.cssText = "padding:3px 10px;cursor:pointer;color:#f8f8f2;" +
+          (idx === activeIndex ? "background:#44475a;" : "");
+        li.addEventListener("mouseenter", function () { activeIndex = idx; render(); });
+        li.addEventListener("mousedown", function (e) { e.preventDefault(); pick(); });
+        ul.appendChild(li);
+      });
+    }
+
+    function pick() {
+      if (!activeHint) return;
+      activeHint.skipNext = true;
+      cm.replaceRange(result.list[activeIndex], result.from, result.to);
+      closeHintWidget();
+    }
+
+    function move(dir) {
+      activeIndex = (activeIndex + dir + result.list.length) % result.list.length;
+      render();
+    }
+
+    render();
+    document.body.appendChild(ul);
+
+    const keyMap = {
+      "Up":    function () { move(-1); },
+      "Down":  function () { move(1); },
+      "Enter": function () { pick(); },
+      "Tab":   function () { pick(); },
+      "Esc":   function () { closeHintWidget(); },
+    };
+    cm.addKeyMap(keyMap);
+
+    const docHandler = function (e) { if (!ul.contains(e.target)) closeHintWidget(); };
+    document.addEventListener("mousedown", docHandler);
+
+    activeHint = { el: ul, cm, result, keyMap, docHandler, skipNext: false };
+  }
+
   function applyModeToEditor(cm) {
     ensureModeRegistered(cm.constructor);
     cm.setOption("mode", "foreshadow");
     if (cm.constructor.registerHelper)
       cm.setOption("lint", { getAnnotations: lintForeshadow, async: false });
-    // Trigger autocomplete on ( and | if the show-hint addon is available
-    if (typeof cm.showHint === "function") {
-      cm.on("inputRead", function (instance, change) {
-        if (!instance.state.completionActive) {
-          const ch = change.text[0];
-          if (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch)) {
-            instance.showHint({ hint: foreshadowHint, completeSingle: false });
-          }
-        }
-      });
-    }
+
+    cm.on("inputRead", function (instance, change) {
+      if (activeHint && activeHint.skipNext) { activeHint.skipNext = false; return; }
+      const ch = change.text[0];
+      if (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch)) {
+        showHintWidget(instance);
+      } else {
+        closeHintWidget();
+      }
+    });
   }
 
   function patchExisting() {
@@ -253,7 +327,7 @@
 
 window.storyFormat({
   name: "Foreshadow",
-  version: "0.0.4",
+  version: "0.0.5",
   author: "Rene Tailleur",
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
