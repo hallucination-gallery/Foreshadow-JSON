@@ -13,7 +13,7 @@
   };
 
   var modeRegistered = false;
-  var STAMP = "_foreshadow_v007";
+  var STAMP = "_foreshadow_v008";
 
   function ensureModeRegistered(CM) {
     if (modeRegistered) return;
@@ -62,7 +62,7 @@
 
     if (CM.registerHelper) {
       CM.registerHelper("lint", "foreshadow", lintForeshadow);
-      CM.registerHelper("hint", "foreshadow", foreshadowHint);
+      CM.registerHelper("hint", "foreshadow", getForeshadowCompletions);
     }
 
     if (!document.getElementById("foreshadow-editor-styles")) {
@@ -333,7 +333,7 @@
 
 window.storyFormat({
   name: "Foreshadow",
-  version: "0.0.7",
+  version: "0.0.8",
   author: "Rene Tailleur",
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
