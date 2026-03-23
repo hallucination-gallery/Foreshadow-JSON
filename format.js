@@ -12,8 +12,9 @@
     if: [2, null], signal: [1, 1], debug_log: [0, 0],
   };
 
+  var VERSION = "0.0.12";
   var modeRegistered = false;
-  var STAMP = "_foreshadow_v011";
+  var STAMP = "_foreshadow_" + VERSION;
 
   function ensureModeRegistered(CM) {
     if (modeRegistered) return;
@@ -83,10 +84,11 @@
       CM.registerHelper("hint", "foreshadow", getForeshadowCompletions);
     }
 
-    if (!document.getElementById("foreshadow-editor-styles")) {
-      const styleEl = document.createElement("style");
-      styleEl.id = "foreshadow-editor-styles";
-      styleEl.textContent = `
+    const existingStyle = document.getElementById("foreshadow-editor-styles");
+    if (existingStyle) existingStyle.remove();
+    const styleEl = document.createElement("style");
+    styleEl.id = "foreshadow-editor-styles";
+    styleEl.textContent = `
         .cm-foreshadow-bracket-1 { color: #e8a900; font-weight: bold; }
         .cm-foreshadow-bracket-2 { color: #c678dd; font-weight: bold; }
         .cm-foreshadow-bracket-3 { color: #56b6c2; font-weight: bold; }
@@ -101,7 +103,6 @@
         .cm-foreshadow-link-arrow   { color: #6272a4; }
       `;
       document.head.appendChild(styleEl);
-    }
   }
 
   function offsetToPos(text, offset) {
@@ -351,7 +352,7 @@
 
 window.storyFormat({
   name: "Foreshadow",
-  version: "0.0.11",
+  version: VERSION,
   author: "Rene Tailleur",
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
