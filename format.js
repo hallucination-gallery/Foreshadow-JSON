@@ -13,7 +13,7 @@
   };
 
   var modeRegistered = false;
-  var STAMP = "_foreshadow_v008";
+  var STAMP = "_foreshadow_v011";
 
   function ensureModeRegistered(CM) {
     if (modeRegistered) return;
@@ -22,24 +22,29 @@
     CM.defineMode("foreshadow", function () {
       return {
         startState: function () {
-          return { depth: 0, pipeCount: 0, fnName: null, fnStack: [] };
+          return { depth: 0, pipeCount: 0, fnName: null, fnStack: [], inLink: false };
         },
         copyState: function (state) {
-          return { depth: state.depth, pipeCount: state.pipeCount, fnName: state.fnName, fnStack: state.fnStack.slice() };
+          return { depth: state.depth, pipeCount: state.pipeCount, fnName: state.fnName, fnStack: state.fnStack.slice(), inLink: state.inLink };
         },
         token: function (stream, state) {
+          // ── Script block opening (( ───────────────────────────────────────
           if (stream.match("((")) {
             state.fnStack.push({ pipeCount: state.pipeCount, fnName: state.fnName });
+            const cls = "foreshadow-bracket-" + (state.depth % 3 + 1);
             state.depth++; state.pipeCount = 0; state.fnName = null;
-            return "foreshadow-bracket";
+            return cls;
           }
+          // ── Script block closing )) ───────────────────────────────────────
           if (state.depth > 0 && stream.match("))")) {
             const parent = state.fnStack.pop();
+            const cls = "foreshadow-bracket-" + ((state.depth - 1) % 3 + 1);
             state.depth--;
             state.pipeCount = parent ? parent.pipeCount : 0;
             state.fnName = parent ? parent.fnName : null;
-            return "foreshadow-bracket";
+            return cls;
           }
+          // ── Inside a script block ─────────────────────────────────────────
           if (state.depth > 0) {
             if (stream.match("((", false) || stream.match("))", false)) return null;
             if (stream.eat("|")) { state.pipeCount++; return "foreshadow-pipe"; }
@@ -55,6 +60,19 @@
             if (stream.match(/^[^|()\n]+/)) return "foreshadow-param";
             stream.next(); return null;
           }
+          // ── Twine link [[ ]] ──────────────────────────────────────────────
+          if (!state.inLink && stream.match("[[")) {
+            state.inLink = true;
+            return "foreshadow-link-bracket";
+          }
+          if (state.inLink) {
+            if (stream.match("]]")) { state.inLink = false; return "foreshadow-link-bracket"; }
+            if (stream.match("->") || stream.match("<-")) return "foreshadow-link-arrow";
+            if (stream.eat("|")) return "foreshadow-link-arrow";
+            if (stream.match(/^[^\]|<>-]+/)) return "foreshadow-link-text";
+            stream.next(); return "foreshadow-link-text";
+          }
+          // ── Regular prose ─────────────────────────────────────────────────
           stream.next(); return null;
         },
       };
@@ -69,13 +87,18 @@
       const styleEl = document.createElement("style");
       styleEl.id = "foreshadow-editor-styles";
       styleEl.textContent = `
-        .cm-foreshadow-bracket  { color: #e8a900; font-weight: bold; }
-        .cm-foreshadow-fn       { color: #7ecfff; font-weight: bold; }
-        .cm-foreshadow-pipe     { color: #6272a4; }
-        .cm-foreshadow-operator { color: #ff79c6; }
-        .cm-foreshadow-number   { color: #bd93f9; }
-        .cm-foreshadow-param    { color: #50fa7b; }
-        .cm-foreshadow-error    { color: #ff5555; text-decoration: underline wavy red; }
+        .cm-foreshadow-bracket-1 { color: #e8a900; font-weight: bold; }
+        .cm-foreshadow-bracket-2 { color: #c678dd; font-weight: bold; }
+        .cm-foreshadow-bracket-3 { color: #56b6c2; font-weight: bold; }
+        .cm-foreshadow-fn        { color: #7ecfff; font-weight: bold; }
+        .cm-foreshadow-pipe      { color: #6272a4; }
+        .cm-foreshadow-operator  { color: #ff79c6; }
+        .cm-foreshadow-number    { color: #bd93f9; }
+        .cm-foreshadow-param     { color: #50fa7b; }
+        .cm-foreshadow-error     { color: #ff5555; text-decoration: underline wavy red; }
+        .cm-foreshadow-link-bracket { color: #8be9fd; font-weight: bold; }
+        .cm-foreshadow-link-text    { color: #f1fa8c; }
+        .cm-foreshadow-link-arrow   { color: #6272a4; }
       `;
       document.head.appendChild(styleEl);
     }
@@ -230,7 +253,6 @@
     closeHintWidget();
     const result = getForeshadowCompletions(cm);
     if (!result) return;
-
     const coords = cm.cursorCoords(true, "page");
     let activeIndex = 0;
 
@@ -302,14 +324,10 @@
     if (cm.constructor.registerHelper)
       cm.setOption("lint", { getAnnotations: lintForeshadow, async: false });
 
-    console.log("[Foreshadow] applyModeToEditor called, attaching listeners");
-
     cm.on("change", function (instance, change) {
-      console.log("[Foreshadow] change event", change.origin, change.text);
       if (activeHint && activeHint.skipNext) { activeHint.skipNext = false; return; }
       const ch = change.text[0] && change.text[0][0];
       if (change.origin === "+input" && (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch))) {
-        console.log("[Foreshadow] triggering hint for char:", ch);
         showHintWidget(instance);
       } else {
         closeHintWidget();
@@ -333,7 +351,7 @@
 
 window.storyFormat({
   name: "Foreshadow",
-  version: "0.0.8",
+  version: "0.0.11",
   author: "Rene Tailleur",
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
