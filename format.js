@@ -59,7 +59,10 @@
       };
     });
 
-    if (CM.registerHelper) CM.registerHelper("lint", "foreshadow", lintForeshadow);
+    if (CM.registerHelper) {
+      CM.registerHelper("lint", "foreshadow", lintForeshadow);
+      CM.registerHelper("hint", "foreshadow", foreshadowHint);
+    }
 
     if (!document.getElementById("foreshadow-editor-styles")) {
       const styleEl = document.createElement("style");
@@ -158,11 +161,80 @@
     }));
   }
 
+  // ─── Hint / autocomplete ──────────────────────────────────────────────────
+  // Returns completions for the token at the cursor when inside a (( )) block.
+
+  function foreshadowHint(cm) {
+    const cursor = cm.getCursor();
+
+    // Compute cursor's character offset in the full document text
+    let cursorOffset = 0;
+    for (let i = 0; i < cursor.line; i++) cursorOffset += cm.getLine(i).length + 1;
+    cursorOffset += cursor.ch;
+
+    const textBefore = cm.getValue().substring(0, cursorOffset);
+
+    // Walk backwards to find the innermost unclosed (( block
+    let depth = 0, blockStart = -1;
+    let i = textBefore.length - 1;
+    while (i >= 1) {
+      if (textBefore[i - 1] === ")" && textBefore[i] === ")") { depth++; i -= 2; continue; }
+      if (textBefore[i - 1] === "(" && textBefore[i] === "(") {
+        if (depth === 0) { blockStart = i - 1; break; }
+        depth--; i -= 2; continue;
+      }
+      i--;
+    }
+
+    if (blockStart === -1) return null; // cursor is not inside a (( )) block
+
+    const parts = textBefore.substring(blockStart + 2).split("|");
+    const partIndex = parts.length - 1;
+    const currentPart = parts[partIndex];
+    const trimmed = currentPart.trimStart(); // strip leading whitespace for matching
+    const partial = trimmed.toLowerCase();
+
+    let list = [];
+
+    if (partIndex === 0) {
+      // Position of the function name
+      list = VALID_FUNCTIONS.filter(f => f.startsWith(partial));
+    } else {
+      const fn = parts[0].trim().toLowerCase();
+      const param = partIndex - 1; // 0-indexed parameter position
+      if (fn === "pc" && param === 0) {
+        list = PC_NPC_ATTRS.filter(a => a.startsWith(partial));
+      } else if (fn === "npc" && param === 1) {
+        list = PC_NPC_ATTRS.filter(a => a.startsWith(partial));
+      } else if (fn === "if" && param === 0 && "pc".startsWith(partial)) {
+        list = ["pc"];
+      }
+    }
+
+    if (!list.length) return null;
+    return {
+      list,
+      from: { line: cursor.line, ch: cursor.ch - trimmed.length },
+      to: cursor,
+    };
+  }
+
   function applyModeToEditor(cm) {
     ensureModeRegistered(cm.constructor);
     cm.setOption("mode", "foreshadow");
     if (cm.constructor.registerHelper)
       cm.setOption("lint", { getAnnotations: lintForeshadow, async: false });
+    // Trigger autocomplete on ( and | if the show-hint addon is available
+    if (typeof cm.showHint === "function") {
+      cm.on("inputRead", function (instance, change) {
+        if (!instance.state.completionActive) {
+          const ch = change.text[0];
+          if (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch)) {
+            instance.showHint({ hint: foreshadowHint, completeSingle: false });
+          }
+        }
+      });
+    }
   }
 
   function patchExisting() {
@@ -181,7 +253,7 @@
 
 window.storyFormat({
   name: "Foreshadow",
-  version: "0.0.3",
+  version: "0.0.4",
   author: "Rene Tailleur",
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
