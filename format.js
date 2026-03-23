@@ -1,15 +1,36 @@
 // ─── Foreshadow editor extension ──────────────────────────────────────────────
-// Runs inline when Twine loads this format file so it works regardless of
-// whether Twine supports the editorExtensions field.
+// Runs inline when Twine loads this format file
 (function () {
   "use strict";
 
-  const VALID_FUNCTIONS = ["set","get","pc","npc","if","signal","debug_log"];
+  const VALID_FUNCTIONS = [
+    "set",
+    "get",
+    "pc",
+    "npc",
+    "if",
+    "signal",
+    "debug_log",
+  ];
   const IF_OPERATORS = ["==", "!=", ">=", "<=", ">", "<"];
-  const PC_NPC_ATTRS = ["name","gender","pro","pro_cap","pro_obj","pronoun_obj_cap","pro_pos","pro_pos_cap"];
+  const PC_NPC_ATTRS = [
+    "name",
+    "gender",
+    "pro",
+    "pro_cap",
+    "pro_obj",
+    "pronoun_obj_cap",
+    "pro_pos",
+    "pro_pos_cap",
+  ];
   const PARAM_COUNTS = {
-    set: [2, 2], get: [1, 1], pc: [1, 1], npc: [2, 2],
-    if: [2, null], signal: [1, 1], debug_log: [0, 0],
+    set: [2, 2],
+    get: [1, 1],
+    pc: [1, 1],
+    npc: [2, 2],
+    if: [2, null],
+    signal: [1, 1],
+    debug_log: [0, 0],
   };
 
   var VERSION = "0.0.12";
@@ -23,23 +44,40 @@
     CM.defineMode("foreshadow", function () {
       return {
         startState: function () {
-          return { depth: 0, pipeCount: 0, fnName: null, fnStack: [], inLink: false };
+          return {
+            depth: 0,
+            pipeCount: 0,
+            fnName: null,
+            fnStack: [],
+            inLink: false,
+          };
         },
         copyState: function (state) {
-          return { depth: state.depth, pipeCount: state.pipeCount, fnName: state.fnName, fnStack: state.fnStack.slice(), inLink: state.inLink };
+          return {
+            depth: state.depth,
+            pipeCount: state.pipeCount,
+            fnName: state.fnName,
+            fnStack: state.fnStack.slice(),
+            inLink: state.inLink,
+          };
         },
         token: function (stream, state) {
           // ── Script block opening (( ───────────────────────────────────────
           if (stream.match("((")) {
-            state.fnStack.push({ pipeCount: state.pipeCount, fnName: state.fnName });
-            const cls = "foreshadow-bracket-" + (state.depth % 3 + 1);
-            state.depth++; state.pipeCount = 0; state.fnName = null;
+            state.fnStack.push({
+              pipeCount: state.pipeCount,
+              fnName: state.fnName,
+            });
+            const cls = "foreshadow-bracket-" + ((state.depth % 3) + 1);
+            state.depth++;
+            state.pipeCount = 0;
+            state.fnName = null;
             return cls;
           }
           // ── Script block closing )) ───────────────────────────────────────
           if (state.depth > 0 && stream.match("))")) {
             const parent = state.fnStack.pop();
-            const cls = "foreshadow-bracket-" + ((state.depth - 1) % 3 + 1);
+            const cls = "foreshadow-bracket-" + (((state.depth - 1) % 3) + 1);
             state.depth--;
             state.pipeCount = parent ? parent.pipeCount : 0;
             state.fnName = parent ? parent.fnName : null;
@@ -47,19 +85,27 @@
           }
           // ── Inside a script block ─────────────────────────────────────────
           if (state.depth > 0) {
-            if (stream.match("((", false) || stream.match("))", false)) return null;
-            if (stream.eat("|")) { state.pipeCount++; return "foreshadow-pipe"; }
+            if (stream.match("((", false) || stream.match("))", false))
+              return null;
+            if (stream.eat("|")) {
+              state.pipeCount++;
+              return "foreshadow-pipe";
+            }
             if (state.pipeCount === 0 && state.fnName === null) {
               if (stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
                 const word = stream.current().toLowerCase();
                 state.fnName = word;
-                return VALID_FUNCTIONS.includes(word) ? "foreshadow-fn" : "foreshadow-error";
+                return VALID_FUNCTIONS.includes(word)
+                  ? "foreshadow-fn"
+                  : "foreshadow-error";
               }
             }
-            if (stream.match(/^(==|!=|>=|<=|>|<)/)) return "foreshadow-operator";
+            if (stream.match(/^(==|!=|>=|<=|>|<)/))
+              return "foreshadow-operator";
             if (stream.match(/^-?\d+(\.\d+)?/)) return "foreshadow-number";
             if (stream.match(/^[^|()\n]+/)) return "foreshadow-param";
-            stream.next(); return null;
+            stream.next();
+            return null;
           }
           // ── Twine link [[ ]] ──────────────────────────────────────────────
           if (!state.inLink && stream.match("[[")) {
@@ -67,14 +113,20 @@
             return "foreshadow-link-bracket";
           }
           if (state.inLink) {
-            if (stream.match("]]")) { state.inLink = false; return "foreshadow-link-bracket"; }
-            if (stream.match("->") || stream.match("<-")) return "foreshadow-link-arrow";
+            if (stream.match("]]")) {
+              state.inLink = false;
+              return "foreshadow-link-bracket";
+            }
+            if (stream.match("->") || stream.match("<-"))
+              return "foreshadow-link-arrow";
             if (stream.eat("|")) return "foreshadow-link-arrow";
             if (stream.match(/^[^\]|<>-]+/)) return "foreshadow-link-text";
-            stream.next(); return "foreshadow-link-text";
+            stream.next();
+            return "foreshadow-link-text";
           }
           // ── Regular prose ─────────────────────────────────────────────────
-          stream.next(); return null;
+          stream.next();
+          return null;
         },
       };
     });
@@ -102,7 +154,7 @@
         .cm-foreshadow-link-text    { color: #f1fa8c; }
         .cm-foreshadow-link-arrow   { color: #6272a4; }
       `;
-      document.head.appendChild(styleEl);
+    document.head.appendChild(styleEl);
   }
 
   function offsetToPos(text, offset) {
@@ -113,12 +165,22 @@
   function validateIfCondition(start, end, condition, errors) {
     const parts = condition.trim().split(/\s+/);
     if (parts.length !== 3) {
-      errors.push({ from: start, to: end, message: `'if' condition should be 'variable operator value', got: '${condition.trim()}'`, severity: "warning" });
+      errors.push({
+        from: start,
+        to: end,
+        message: `'if' condition should be 'variable operator value', got: '${condition.trim()}'`,
+        severity: "warning",
+      });
       return;
     }
     const op = parts[1];
     if (!IF_OPERATORS.includes(op))
-      errors.push({ from: start, to: end, message: `Unknown operator '${op}'. Valid: ${IF_OPERATORS.join(" ")}`, severity: "error" });
+      errors.push({
+        from: start,
+        to: end,
+        message: `Unknown operator '${op}'. Valid: ${IF_OPERATORS.join(" ")}`,
+        severity: "error",
+      });
   }
 
   function validateBlock(start, end, tokens, errors) {
@@ -126,63 +188,149 @@
     const args = tokens.slice(1);
     const argCount = args.length;
     if (!VALID_FUNCTIONS.includes(fnName)) {
-      errors.push({ from: start, to: start + 2 + tokens[0].length, message: `Unknown function: '${fnName}'`, severity: "error" });
+      errors.push({
+        from: start,
+        to: start + 2 + tokens[0].length,
+        message: `Unknown function: '${fnName}'`,
+        severity: "error",
+      });
       return;
     }
     const [min, max] = PARAM_COUNTS[fnName];
     if (fnName === "if") {
-      if (argCount < 2) { errors.push({ from: start, to: end, message: `'if' needs at least 2 arguments, got ${argCount}`, severity: "error" }); return; }
+      if (argCount < 2) {
+        errors.push({
+          from: start,
+          to: end,
+          message: `'if' needs at least 2 arguments, got ${argCount}`,
+          severity: "error",
+        });
+        return;
+      }
       const isPcVariant = args[0].trim().toLowerCase() === "pc";
       if (isPcVariant) {
-        if (argCount < 5) { errors.push({ from: start, to: end, message: `'if|pc' needs at least 5 arguments, got ${argCount}`, severity: "error" }); return; }
-        if (argCount > 6) errors.push({ from: start, to: end, message: `'if|pc' takes at most 6 arguments, got ${argCount}`, severity: "warning" });
+        if (argCount < 5) {
+          errors.push({
+            from: start,
+            to: end,
+            message: `'if|pc' needs at least 5 arguments, got ${argCount}`,
+            severity: "error",
+          });
+          return;
+        }
+        if (argCount > 6)
+          errors.push({
+            from: start,
+            to: end,
+            message: `'if|pc' takes at most 6 arguments, got ${argCount}`,
+            severity: "warning",
+          });
         validateIfCondition(start, end, args[1], errors);
       } else {
-        if (argCount > 3) errors.push({ from: start, to: end, message: `'if' takes at most 3 arguments, got ${argCount}`, severity: "warning" });
+        if (argCount > 3)
+          errors.push({
+            from: start,
+            to: end,
+            message: `'if' takes at most 3 arguments, got ${argCount}`,
+            severity: "warning",
+          });
         validateIfCondition(start, end, args[0], errors);
       }
       return;
     }
-    if (argCount < min) errors.push({ from: start, to: end, message: `'${fnName}' needs ${min} argument(s), got ${argCount}`, severity: "error" });
-    else if (max !== null && argCount > max) errors.push({ from: start, to: end, message: `'${fnName}' takes at most ${max} argument(s), got ${argCount}`, severity: "warning" });
+    if (argCount < min)
+      errors.push({
+        from: start,
+        to: end,
+        message: `'${fnName}' needs ${min} argument(s), got ${argCount}`,
+        severity: "error",
+      });
+    else if (max !== null && argCount > max)
+      errors.push({
+        from: start,
+        to: end,
+        message: `'${fnName}' takes at most ${max} argument(s), got ${argCount}`,
+        severity: "warning",
+      });
     if (fnName === "pc" && argCount >= 1) {
       const attr = args[0].trim().toLowerCase();
-      if (!PC_NPC_ATTRS.includes(attr)) errors.push({ from: start, to: end, message: `Unknown pc attribute: '${attr}'. Valid: ${PC_NPC_ATTRS.join(", ")}`, severity: "warning" });
+      if (!PC_NPC_ATTRS.includes(attr))
+        errors.push({
+          from: start,
+          to: end,
+          message: `Unknown pc attribute: '${attr}'. Valid: ${PC_NPC_ATTRS.join(", ")}`,
+          severity: "warning",
+        });
     }
     if (fnName === "npc" && argCount >= 2) {
       const attr = args[1].trim().toLowerCase();
-      if (!PC_NPC_ATTRS.includes(attr)) errors.push({ from: start, to: end, message: `Unknown npc attribute: '${attr}'. Valid: ${PC_NPC_ATTRS.join(", ")}`, severity: "warning" });
+      if (!PC_NPC_ATTRS.includes(attr))
+        errors.push({
+          from: start,
+          to: end,
+          message: `Unknown npc attribute: '${attr}'. Valid: ${PC_NPC_ATTRS.join(", ")}`,
+          severity: "warning",
+        });
     }
   }
 
   function parseForeshadow(text) {
-    const errors = [], stack = [];
+    const errors = [],
+      stack = [];
     let i = 0;
     while (i < text.length) {
-      if (text.substr(i, 2) === "((") { stack.push({ start: i, tokens: [], currentToken: "" }); i += 2; continue; }
-      if (stack.length === 0) { i++; continue; }
+      if (text.substr(i, 2) === "((") {
+        stack.push({ start: i, tokens: [], currentToken: "" });
+        i += 2;
+        continue;
+      }
+      if (stack.length === 0) {
+        i++;
+        continue;
+      }
       const block = stack[stack.length - 1];
       if (text.substr(i, 2) === "))") {
         block.tokens.push(block.currentToken);
-        const tokens = block.tokens.map(t => t.trim());
+        const tokens = block.tokens.map((t) => t.trim());
         stack.pop();
-        if (tokens[0] === "") errors.push({ from: block.start, to: i + 2, message: "Empty script block (( ))", severity: "warning" });
+        if (tokens[0] === "")
+          errors.push({
+            from: block.start,
+            to: i + 2,
+            message: "Empty script block (( ))",
+            severity: "warning",
+          });
         else validateBlock(block.start, i + 2, tokens, errors);
-        if (stack.length > 0) stack[stack.length - 1].currentToken += "((\u2026))";
-        i += 2; continue;
+        if (stack.length > 0)
+          stack[stack.length - 1].currentToken += "((\u2026))";
+        i += 2;
+        continue;
       }
-      if (text[i] === "|") { block.tokens.push(block.currentToken); block.currentToken = ""; i++; continue; }
-      block.currentToken += text[i]; i++;
+      if (text[i] === "|") {
+        block.tokens.push(block.currentToken);
+        block.currentToken = "";
+        i++;
+        continue;
+      }
+      block.currentToken += text[i];
+      i++;
     }
     for (const unclosed of stack)
-      errors.push({ from: unclosed.start, to: unclosed.start + 2, message: "Unclosed '((' — missing '))'", severity: "error" });
+      errors.push({
+        from: unclosed.start,
+        to: unclosed.start + 2,
+        message: "Unclosed '((' — missing '))'",
+        severity: "error",
+      });
     return errors;
   }
 
   function lintForeshadow(text) {
-    return parseForeshadow(text).map(e => ({
-      message: e.message, severity: e.severity,
-      from: offsetToPos(text, e.from), to: offsetToPos(text, e.to),
+    return parseForeshadow(text).map((e) => ({
+      message: e.message,
+      severity: e.severity,
+      from: offsetToPos(text, e.from),
+      to: offsetToPos(text, e.to),
     }));
   }
 
@@ -192,19 +340,30 @@
   function getForeshadowCompletions(cm) {
     const cursor = cm.getCursor();
     let cursorOffset = 0;
-    for (let i = 0; i < cursor.line; i++) cursorOffset += cm.getLine(i).length + 1;
+    for (let i = 0; i < cursor.line; i++)
+      cursorOffset += cm.getLine(i).length + 1;
     cursorOffset += cursor.ch;
 
     const textBefore = cm.getValue().substring(0, cursorOffset);
 
     // Walk backwards to find the innermost unclosed (( block
-    let depth = 0, blockStart = -1;
+    let depth = 0,
+      blockStart = -1;
     let i = textBefore.length - 1;
     while (i >= 1) {
-      if (textBefore[i - 1] === ")" && textBefore[i] === ")") { depth++; i -= 2; continue; }
+      if (textBefore[i - 1] === ")" && textBefore[i] === ")") {
+        depth++;
+        i -= 2;
+        continue;
+      }
       if (textBefore[i - 1] === "(" && textBefore[i] === "(") {
-        if (depth === 0) { blockStart = i - 1; break; }
-        depth--; i -= 2; continue;
+        if (depth === 0) {
+          blockStart = i - 1;
+          break;
+        }
+        depth--;
+        i -= 2;
+        continue;
       }
       i--;
     }
@@ -218,13 +377,16 @@
 
     let list = [];
     if (partIndex === 0) {
-      list = VALID_FUNCTIONS.filter(f => f.startsWith(partial));
+      list = VALID_FUNCTIONS.filter((f) => f.startsWith(partial));
     } else {
       const fn = parts[0].trim().toLowerCase();
       const param = partIndex - 1;
-      if (fn === "pc" && param === 0)       list = PC_NPC_ATTRS.filter(a => a.startsWith(partial));
-      else if (fn === "npc" && param === 1) list = PC_NPC_ATTRS.filter(a => a.startsWith(partial));
-      else if (fn === "if" && param === 0 && "pc".startsWith(partial)) list = ["pc"];
+      if (fn === "pc" && param === 0)
+        list = PC_NPC_ATTRS.filter((a) => a.startsWith(partial));
+      else if (fn === "npc" && param === 1)
+        list = PC_NPC_ATTRS.filter((a) => a.startsWith(partial));
+      else if (fn === "if" && param === 0 && "pc".startsWith(partial))
+        list = ["pc"];
     }
 
     // Don't suggest when the word is already an exact match
@@ -238,7 +400,7 @@
     };
   }
 
-  // ─── Hint widget (no external addon required) ─────────────────────────────
+  // ─── Hint widget ─────────────────────────────
 
   var activeHint = null;
 
@@ -280,10 +442,17 @@
       result.list.forEach(function (item, idx) {
         const li = document.createElement("li");
         li.textContent = item;
-        li.style.cssText = "padding:3px 10px;cursor:pointer;color:#f8f8f2;" +
+        li.style.cssText =
+          "padding:3px 10px;cursor:pointer;color:#f8f8f2;" +
           (idx === activeIndex ? "background:#44475a;" : "");
-        li.addEventListener("mouseenter", function () { activeIndex = idx; render(); });
-        li.addEventListener("mousedown", function (e) { e.preventDefault(); pick(); });
+        li.addEventListener("mouseenter", function () {
+          activeIndex = idx;
+          render();
+        });
+        li.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          pick();
+        });
         ul.appendChild(li);
       });
     }
@@ -296,7 +465,8 @@
     }
 
     function move(dir) {
-      activeIndex = (activeIndex + dir + result.list.length) % result.list.length;
+      activeIndex =
+        (activeIndex + dir + result.list.length) % result.list.length;
       render();
     }
 
@@ -304,15 +474,27 @@
     document.body.appendChild(ul);
 
     const keyMap = {
-      "Up":    function () { move(-1); },
-      "Down":  function () { move(1); },
-      "Enter": function () { pick(); },
-      "Tab":   function () { pick(); },
-      "Esc":   function () { closeHintWidget(); },
+      Up: function () {
+        move(-1);
+      },
+      Down: function () {
+        move(1);
+      },
+      Enter: function () {
+        pick();
+      },
+      Tab: function () {
+        pick();
+      },
+      Esc: function () {
+        closeHintWidget();
+      },
     };
     cm.addKeyMap(keyMap);
 
-    const docHandler = function (e) { if (!ul.contains(e.target)) closeHintWidget(); };
+    const docHandler = function (e) {
+      if (!ul.contains(e.target)) closeHintWidget();
+    };
     document.addEventListener("mousedown", docHandler);
 
     activeHint = { el: ul, cm, result, keyMap, docHandler, skipNext: false };
@@ -326,9 +508,15 @@
       cm.setOption("lint", { getAnnotations: lintForeshadow, async: false });
 
     cm.on("change", function (instance, change) {
-      if (activeHint && activeHint.skipNext) { activeHint.skipNext = false; return; }
+      if (activeHint && activeHint.skipNext) {
+        activeHint.skipNext = false;
+        return;
+      }
       const ch = change.text[0] && change.text[0][0];
-      if (change.origin === "+input" && (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch))) {
+      if (
+        change.origin === "+input" &&
+        (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch))
+      ) {
         showHintWidget(instance);
       } else {
         closeHintWidget();
@@ -343,10 +531,13 @@
     });
   }
 
-  if (typeof window.CodeMirror !== "undefined") ensureModeRegistered(window.CodeMirror);
+  if (typeof window.CodeMirror !== "undefined")
+    ensureModeRegistered(window.CodeMirror);
 
   setTimeout(patchExisting, 0);
-  const observer = new MutationObserver(function () { setTimeout(patchExisting, 0); });
+  const observer = new MutationObserver(function () {
+    setTimeout(patchExisting, 0);
+  });
   observer.observe(document.body, { childList: true, subtree: true });
 })();
 
