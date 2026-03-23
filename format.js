@@ -300,10 +300,14 @@
     if (cm.constructor.registerHelper)
       cm.setOption("lint", { getAnnotations: lintForeshadow, async: false });
 
-    cm.on("inputRead", function (instance, change) {
+    console.log("[Foreshadow] applyModeToEditor called, attaching listeners");
+
+    cm.on("change", function (instance, change) {
+      console.log("[Foreshadow] change event", change.origin, change.text);
       if (activeHint && activeHint.skipNext) { activeHint.skipNext = false; return; }
-      const ch = change.text[0];
-      if (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch)) {
+      const ch = change.text[0] && change.text[0][0];
+      if (change.origin === "+input" && (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch))) {
+        console.log("[Foreshadow] triggering hint for char:", ch);
         showHintWidget(instance);
       } else {
         closeHintWidget();
@@ -327,7 +331,7 @@
 
 window.storyFormat({
   name: "Foreshadow",
-  version: "0.0.5",
+  version: "0.0.6",
   author: "Rene Tailleur",
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
