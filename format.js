@@ -4,8 +4,6 @@
 (function () {
   "use strict";
 
-  console.log("[Foreshadow] editor extension loaded");
-
   const VALID_FUNCTIONS = ["set","get","pc","npc","if","signal","debug_log"];
   const IF_OPERATORS = ["==", "!=", ">=", "<=", ">", "<"];
   const PC_NPC_ATTRS = ["name","gender","pro","pro_cap","pro_obj","pronoun_obj_cap","pro_pos","pro_pos_cap"];
