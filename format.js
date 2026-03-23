@@ -1,11 +1,193 @@
+// ─── Foreshadow editor extension ──────────────────────────────────────────────
+// Runs inline when Twine loads this format file so it works regardless of
+// whether Twine supports the editorExtensions field.
+(function () {
+  "use strict";
+
+  console.log("[Foreshadow] editor extension loaded");
+
+  const VALID_FUNCTIONS = ["set","get","pc","npc","if","signal","debug_log"];
+  const IF_OPERATORS = ["==", "!=", ">=", "<=", ">", "<"];
+  const PC_NPC_ATTRS = ["name","gender","pro","pro_cap","pro_obj","pronoun_obj_cap","pro_pos","pro_pos_cap"];
+  const PARAM_COUNTS = {
+    set: [2, 2], get: [1, 1], pc: [1, 1], npc: [2, 2],
+    if: [2, null], signal: [1, 1], debug_log: [0, 0],
+  };
+
+  var modeRegistered = false;
+
+  function ensureModeRegistered(CM) {
+    if (modeRegistered) return;
+    modeRegistered = true;
+
+    CM.defineMode("foreshadow", function () {
+      return {
+        startState: function () {
+          return { depth: 0, pipeCount: 0, fnName: null, fnStack: [] };
+        },
+        copyState: function (state) {
+          return { depth: state.depth, pipeCount: state.pipeCount, fnName: state.fnName, fnStack: state.fnStack.slice() };
+        },
+        token: function (stream, state) {
+          if (stream.match("((")) {
+            state.fnStack.push({ pipeCount: state.pipeCount, fnName: state.fnName });
+            state.depth++; state.pipeCount = 0; state.fnName = null;
+            return "foreshadow-bracket";
+          }
+          if (state.depth > 0 && stream.match("))")) {
+            const parent = state.fnStack.pop();
+            state.depth--;
+            state.pipeCount = parent ? parent.pipeCount : 0;
+            state.fnName = parent ? parent.fnName : null;
+            return "foreshadow-bracket";
+          }
+          if (state.depth > 0) {
+            if (stream.match("((", false) || stream.match("))", false)) return null;
+            if (stream.eat("|")) { state.pipeCount++; return "foreshadow-pipe"; }
+            if (state.pipeCount === 0 && state.fnName === null) {
+              if (stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
+                const word = stream.current().toLowerCase();
+                state.fnName = word;
+                return VALID_FUNCTIONS.includes(word) ? "foreshadow-fn" : "foreshadow-error";
+              }
+            }
+            if (stream.match(/^(==|!=|>=|<=|>|<)/)) return "foreshadow-operator";
+            if (stream.match(/^-?\d+(\.\d+)?/)) return "foreshadow-number";
+            if (stream.match(/^[^|()\n]+/)) return "foreshadow-param";
+            stream.next(); return null;
+          }
+          stream.next(); return null;
+        },
+      };
+    });
+
+    if (CM.registerHelper) CM.registerHelper("lint", "foreshadow", lintForeshadow);
+
+    if (!document.getElementById("foreshadow-editor-styles")) {
+      const styleEl = document.createElement("style");
+      styleEl.id = "foreshadow-editor-styles";
+      styleEl.textContent = `
+        .cm-foreshadow-bracket  { color: #e8a900; font-weight: bold; }
+        .cm-foreshadow-fn       { color: #7ecfff; font-weight: bold; }
+        .cm-foreshadow-pipe     { color: #6272a4; }
+        .cm-foreshadow-operator { color: #ff79c6; }
+        .cm-foreshadow-number   { color: #bd93f9; }
+        .cm-foreshadow-param    { color: #50fa7b; }
+        .cm-foreshadow-error    { color: #ff5555; text-decoration: underline wavy red; }
+      `;
+      document.head.appendChild(styleEl);
+    }
+  }
+
+  function offsetToPos(text, offset) {
+    const before = text.substring(0, offset).split("\n");
+    return { line: before.length - 1, ch: before[before.length - 1].length };
+  }
+
+  function validateIfCondition(start, end, condition, errors) {
+    const parts = condition.trim().split(/\s+/);
+    if (parts.length !== 3) {
+      errors.push({ from: start, to: end, message: `'if' condition should be 'variable operator value', got: '${condition.trim()}'`, severity: "warning" });
+      return;
+    }
+    const op = parts[1];
+    if (!IF_OPERATORS.includes(op))
+      errors.push({ from: start, to: end, message: `Unknown operator '${op}'. Valid: ${IF_OPERATORS.join(" ")}`, severity: "error" });
+  }
+
+  function validateBlock(start, end, tokens, errors) {
+    const fnName = tokens[0].toLowerCase();
+    const args = tokens.slice(1);
+    const argCount = args.length;
+    if (!VALID_FUNCTIONS.includes(fnName)) {
+      errors.push({ from: start, to: start + 2 + tokens[0].length, message: `Unknown function: '${fnName}'`, severity: "error" });
+      return;
+    }
+    const [min, max] = PARAM_COUNTS[fnName];
+    if (fnName === "if") {
+      if (argCount < 2) { errors.push({ from: start, to: end, message: `'if' needs at least 2 arguments, got ${argCount}`, severity: "error" }); return; }
+      const isPcVariant = args[0].trim().toLowerCase() === "pc";
+      if (isPcVariant) {
+        if (argCount < 5) { errors.push({ from: start, to: end, message: `'if|pc' needs at least 5 arguments, got ${argCount}`, severity: "error" }); return; }
+        if (argCount > 6) errors.push({ from: start, to: end, message: `'if|pc' takes at most 6 arguments, got ${argCount}`, severity: "warning" });
+        validateIfCondition(start, end, args[1], errors);
+      } else {
+        if (argCount > 3) errors.push({ from: start, to: end, message: `'if' takes at most 3 arguments, got ${argCount}`, severity: "warning" });
+        validateIfCondition(start, end, args[0], errors);
+      }
+      return;
+    }
+    if (argCount < min) errors.push({ from: start, to: end, message: `'${fnName}' needs ${min} argument(s), got ${argCount}`, severity: "error" });
+    else if (max !== null && argCount > max) errors.push({ from: start, to: end, message: `'${fnName}' takes at most ${max} argument(s), got ${argCount}`, severity: "warning" });
+    if (fnName === "pc" && argCount >= 1) {
+      const attr = args[0].trim().toLowerCase();
+      if (!PC_NPC_ATTRS.includes(attr)) errors.push({ from: start, to: end, message: `Unknown pc attribute: '${attr}'. Valid: ${PC_NPC_ATTRS.join(", ")}`, severity: "warning" });
+    }
+    if (fnName === "npc" && argCount >= 2) {
+      const attr = args[1].trim().toLowerCase();
+      if (!PC_NPC_ATTRS.includes(attr)) errors.push({ from: start, to: end, message: `Unknown npc attribute: '${attr}'. Valid: ${PC_NPC_ATTRS.join(", ")}`, severity: "warning" });
+    }
+  }
+
+  function parseForeshadow(text) {
+    const errors = [], stack = [];
+    let i = 0;
+    while (i < text.length) {
+      if (text.substr(i, 2) === "((") { stack.push({ start: i, tokens: [], currentToken: "" }); i += 2; continue; }
+      if (stack.length === 0) { i++; continue; }
+      const block = stack[stack.length - 1];
+      if (text.substr(i, 2) === "))") {
+        block.tokens.push(block.currentToken);
+        const tokens = block.tokens.map(t => t.trim());
+        stack.pop();
+        if (tokens[0] === "") errors.push({ from: block.start, to: i + 2, message: "Empty script block (( ))", severity: "warning" });
+        else validateBlock(block.start, i + 2, tokens, errors);
+        if (stack.length > 0) stack[stack.length - 1].currentToken += "((\u2026))";
+        i += 2; continue;
+      }
+      if (text[i] === "|") { block.tokens.push(block.currentToken); block.currentToken = ""; i++; continue; }
+      block.currentToken += text[i]; i++;
+    }
+    for (const unclosed of stack)
+      errors.push({ from: unclosed.start, to: unclosed.start + 2, message: "Unclosed '((' — missing '))'", severity: "error" });
+    return errors;
+  }
+
+  function lintForeshadow(text) {
+    return parseForeshadow(text).map(e => ({
+      message: e.message, severity: e.severity,
+      from: offsetToPos(text, e.from), to: offsetToPos(text, e.to),
+    }));
+  }
+
+  function applyModeToEditor(cm) {
+    ensureModeRegistered(cm.constructor);
+    cm.setOption("mode", "foreshadow");
+    if (cm.constructor.registerHelper)
+      cm.setOption("lint", { getAnnotations: lintForeshadow, async: false });
+  }
+
+  function patchExisting() {
+    document.querySelectorAll(".CodeMirror").forEach(function (el) {
+      if (el.CodeMirror && el.CodeMirror.getOption("mode") !== "foreshadow")
+        applyModeToEditor(el.CodeMirror);
+    });
+  }
+
+  if (typeof window.CodeMirror !== "undefined") ensureModeRegistered(window.CodeMirror);
+
+  setTimeout(patchExisting, 0);
+  const observer = new MutationObserver(function () { setTimeout(patchExisting, 0); });
+  observer.observe(document.body, { childList: true, subtree: true });
+})();
+
 window.storyFormat({
   name: "Foreshadow",
-  version: "0.0.2",
+  version: "0.0.3",
   author: "Rene Tailleur",
   description:
     "Export your Twine 2 story as a JSON document, with syntax highlighting for Foreshadow dialogue manager, based on JTwine-to-JSON",
   proofing: false,
-  editorExtensions: "https://cdn.jsdelivr.net/gh/hallucination-gallery/Foreshadow-JSON@e46f3ff/foreshadow-editor.js",
   source: `
 	<html>
 	<head>
