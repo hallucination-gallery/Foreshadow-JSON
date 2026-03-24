@@ -1,4 +1,4 @@
-var VERSION = "0.0.12";
+var VERSION = "0.1.0";
 
 // ─── Foreshadow editor extension ──────────────────────────────────────────────
 // Runs inline when Twine loads this format file
@@ -15,6 +15,12 @@ try { (function () {
     "debug_log",
   ];
   const IF_OPERATORS = ["==", "!=", ">=", "<=", ">", "<"];
+  const VALID_SIGNALS = [
+    "social_interaction_started",
+    "combat_started",
+    "returned_to_exploration",
+    "closed_foreshadow",
+  ];
   const PC_NPC_ATTRS = [
     "name",
     "gender",
@@ -275,6 +281,16 @@ try { (function () {
           severity: "warning",
         });
     }
+    if (fnName === "signal" && argCount >= 1) {
+      const sig = args[0].trim().toLowerCase();
+      if (!VALID_SIGNALS.includes(sig))
+        errors.push({
+          from: start,
+          to: end,
+          message: `Unknown signal: '${sig}'. Valid: ${VALID_SIGNALS.join(", ")}`,
+          severity: "warning",
+        });
+    }
   }
 
   function parseForeshadow(text) {
@@ -388,6 +404,8 @@ try { (function () {
         list = PC_NPC_ATTRS.filter((a) => a.startsWith(partial));
       else if (fn === "npc" && param === 1)
         list = PC_NPC_ATTRS.filter((a) => a.startsWith(partial));
+      else if (fn === "signal" && param === 0)
+        list = VALID_SIGNALS.filter((s) => s.startsWith(partial));
       else if (fn === "if" && param === 0 && "pc".startsWith(partial))
         list = ["pc"];
     }
