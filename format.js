@@ -1,3 +1,5 @@
+var VERSION = "0.0.12";
+
 // ─── Foreshadow editor extension ──────────────────────────────────────────────
 // Runs inline when Twine loads this format file
 (function () {
@@ -33,7 +35,6 @@
     debug_log: [0, 0],
   };
 
-  var VERSION = "0.0.12";
   var modeRegistered = false;
   var STAMP = "_foreshadow_" + VERSION;
 
