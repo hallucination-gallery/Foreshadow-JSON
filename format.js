@@ -104,7 +104,7 @@ try { (function () {
             if (stream.match(/^(==|!=|>=|<=|>|<)/))
               return "foreshadow-operator";
             if (stream.match(/^-?\d+(\.\d+)?/)) return "foreshadow-number";
-            if (stream.match(/^[^|()\n]+/)) return "foreshadow-param";
+            if (stream.match(/^[^|()\n]+/)) return "foreshadow-param-" + ((state.pipeCount - 1) % 3 + 1);
             stream.next();
             return null;
           }
@@ -142,18 +142,20 @@ try { (function () {
     const styleEl = document.createElement("style");
     styleEl.id = "foreshadow-editor-styles";
     styleEl.textContent = `
-        .cm-foreshadow-bracket-1 { color: #e8a900; font-weight: bold; }
-        .cm-foreshadow-bracket-2 { color: #c678dd; font-weight: bold; }
-        .cm-foreshadow-bracket-3 { color: #56b6c2; font-weight: bold; }
-        .cm-foreshadow-fn        { color: #7ecfff; font-weight: bold; }
-        .cm-foreshadow-pipe      { color: #6272a4; }
-        .cm-foreshadow-operator  { color: #ff79c6; }
-        .cm-foreshadow-number    { color: #bd93f9; }
-        .cm-foreshadow-param     { color: #50fa7b; }
-        .cm-foreshadow-error     { color: #ff5555; text-decoration: underline wavy red; }
-        .cm-foreshadow-link-bracket { color: #8be9fd; font-weight: bold; }
-        .cm-foreshadow-link-text    { color: #f1fa8c; }
-        .cm-foreshadow-link-arrow   { color: #6272a4; }
+        .cm-foreshadow-bracket-1 { color: #fab387; font-weight: bold; }
+        .cm-foreshadow-bracket-2 { color: #cba6f7; font-weight: bold; }
+        .cm-foreshadow-bracket-3 { color: #94e2d5; font-weight: bold; }
+        .cm-foreshadow-fn        { color: #89dceb; font-weight: bold; }
+        .cm-foreshadow-pipe      { color: #9399b2; }
+        .cm-foreshadow-operator  { color: #eba0ac; }
+        .cm-foreshadow-number    { color: #b4befe; }
+        .cm-foreshadow-param-1   { color: #a6e3a1; }
+        .cm-foreshadow-param-2   { color: #f9e2af; }
+        .cm-foreshadow-param-3   { color: #f2cdcd; }
+        .cm-foreshadow-error     { color: #f38ba8; text-decoration: underline wavy #f38ba8; }
+        .cm-foreshadow-link-bracket { color: #74c7ec; font-weight: bold; }
+        .cm-foreshadow-link-text    { color: #f5e0dc; }
+        .cm-foreshadow-link-arrow   { color: #9399b2; }
       `;
     document.head.appendChild(styleEl);
   }
