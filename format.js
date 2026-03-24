@@ -538,6 +538,8 @@ try { (function () {
     patchExisting();
     const observer = new MutationObserver(function () {
       setTimeout(patchExisting, 0);
+      setTimeout(patchExisting, 150);
+      setTimeout(patchExisting, 500);
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
