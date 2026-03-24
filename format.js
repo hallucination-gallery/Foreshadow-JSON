@@ -532,14 +532,21 @@ try { (function () {
     });
   }
 
-  if (typeof window.CodeMirror !== "undefined")
-    ensureModeRegistered(window.CodeMirror);
+  function initEditor() {
+    if (typeof window.CodeMirror !== "undefined")
+      ensureModeRegistered(window.CodeMirror);
+    patchExisting();
+    const observer = new MutationObserver(function () {
+      setTimeout(patchExisting, 0);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 
-  setTimeout(patchExisting, 0);
-  const observer = new MutationObserver(function () {
-    setTimeout(patchExisting, 0);
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
+  if (document.body) {
+    setTimeout(initEditor, 0);
+  } else {
+    document.addEventListener("DOMContentLoaded", initEditor);
+  }
 })(); } catch(e) { /* editor features unavailable */ }
 
 window.storyFormat({
