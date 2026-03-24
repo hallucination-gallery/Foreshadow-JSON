@@ -2,7 +2,7 @@ var VERSION = "0.0.12";
 
 // ─── Foreshadow editor extension ──────────────────────────────────────────────
 // Runs inline when Twine loads this format file
-(function () {
+try { (function () {
   "use strict";
 
   const VALID_FUNCTIONS = [
@@ -540,7 +540,7 @@ var VERSION = "0.0.12";
     setTimeout(patchExisting, 0);
   });
   observer.observe(document.body, { childList: true, subtree: true });
-})();
+})(); } catch(e) { /* editor features unavailable */ }
 
 window.storyFormat({
   name: "Foreshadow",
