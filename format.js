@@ -502,32 +502,35 @@ try { (function () {
   }
 
   function applyModeToEditor(cm) {
+    const isNew = !cm[STAMP];
     cm[STAMP] = true;
     ensureModeRegistered(cm.constructor);
     cm.setOption("mode", "foreshadow");
     if (cm.constructor.registerHelper)
       cm.setOption("lint", { getAnnotations: lintForeshadow, async: false });
 
-    cm.on("change", function (instance, change) {
-      if (activeHint && activeHint.skipNext) {
-        activeHint.skipNext = false;
-        return;
-      }
-      const ch = change.text[0] && change.text[0][0];
-      if (
-        change.origin === "+input" &&
-        (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch))
-      ) {
-        showHintWidget(instance);
-      } else {
-        closeHintWidget();
-      }
-    });
+    if (isNew) {
+      cm.on("change", function (instance, change) {
+        if (activeHint && activeHint.skipNext) {
+          activeHint.skipNext = false;
+          return;
+        }
+        const ch = change.text[0] && change.text[0][0];
+        if (
+          change.origin === "+input" &&
+          (ch === "(" || ch === "|" || /^[a-z_]$/i.test(ch))
+        ) {
+          showHintWidget(instance);
+        } else {
+          closeHintWidget();
+        }
+      });
+    }
   }
 
   function patchExisting() {
     document.querySelectorAll(".CodeMirror").forEach(function (el) {
-      if (el.CodeMirror && !el.CodeMirror[STAMP])
+      if (el.CodeMirror && (!el.CodeMirror[STAMP] || el.CodeMirror.getOption("mode") !== "foreshadow"))
         applyModeToEditor(el.CodeMirror);
     });
   }
